@@ -1,5 +1,5 @@
 library(tidyverse)
-# library(plotly)
+library(plotly)
 library(ggridges)
 
 #data source: https://www.kaggle.com/cjgdev/formula-1-race-data-19502017
@@ -10,7 +10,7 @@ rm(list = ls())
 # data imports ------------------------------------------------------------
 
 #where the data is housed
-project.path <- "/Users/joemarlo/Dropbox/Data/Datasets/F1 race data" #Mac
+project.path <- "/Users/joemarlo/Dropbox/Data/Projects/F1-Elo" #Mac
 
 #function to import data
 import_multiple_csv <- function(myPath){
@@ -22,7 +22,7 @@ import_multiple_csv <- function(myPath){
 }
 
 #import the data, fix the file name, and "delist" the object
-tmp <- import_multiple_csv(project.path)
+tmp <- import_multiple_csv(paste0(project.path, "/Data"))
 names(tmp) <- lapply(names(tmp), function(name){substr(name, start = 0, stop = nchar(name) - 4) %>% tools::toTitleCase()})
 list2env(tmp, envir = .GlobalEnv)
 rm(tmp, import_multiple_csv)
