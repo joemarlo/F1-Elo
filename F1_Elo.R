@@ -10,7 +10,8 @@ rm(list = ls())
 # data imports ------------------------------------------------------------
 
 #where the data is housed
-project.path <- "/Users/joemarlo/Dropbox/Data/Projects/F1-Elo" #Mac
+# project.path <- "/Users/joemarlo/Dropbox/Data/Projects/F1-Elo" #Mac
+project.path <- "/home/joemarlo/Dropbox/Data/Projects/F1-Elo" #Ubuntu
 
 #function to import data
 import_multiple_csv <- function(myPath){
