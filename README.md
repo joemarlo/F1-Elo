@@ -5,8 +5,8 @@
 ![](F1_Elo_rainbow.png)
 
 ### Top drivers ranked by their best five years
-Position | Elo Rating | Driver
------------- | -------------
+Position | Top 5 years average Elo Rating | Driver
+------------ | ------------ |-------------
 1 | 2044 | Fangio            
 2 | 1992 | Prost             
 3 | 1992 | Fagioli           
@@ -20,6 +20,6 @@ Position | Elo Rating | Driver
 
 
 ### Annual distribution of Elo ratings
-Reveals potential differences in (apparent) skill across the field. Some years are more uniform and others bimodal
+Reveals potential differences in (apparent) skill across the field. Some years are more uniform and others bimodal.
 ![](F1_Elo_ridges.png)
 
