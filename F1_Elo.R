@@ -3,6 +3,8 @@ library(plotly)
 library(ggridges)
 
 #data source: https://www.kaggle.com/cjgdev/formula-1-race-data-19502017
+#elo scoring system: https://en.wikipedia.org/wiki/Elo_rating_system
+#similar 538 article: https://fivethirtyeight.com/features/formula-one-racing/
 
 #remove all objects
 rm(list = ls())
@@ -10,8 +12,7 @@ rm(list = ls())
 # data imports ------------------------------------------------------------
 
 #where the data is housed
-# project.path <- "/Users/joemarlo/Dropbox/Data/Projects/F1-Elo" #Mac
-project.path <- "/home/joemarlo/Dropbox/Data/Projects/F1-Elo" #Ubuntu
+project.path <- getwd()
 
 #function to import data
 import_multiple_csv <- function(myPath){
@@ -31,7 +32,7 @@ rm(tmp, import_multiple_csv)
 
 # ELO ---------------------------------------------------------------------
 
-rookieElo <- 1300
+rookieElo <- 1300 #elo starting value
 kFactor <- 24 #starting value for K factor; 538 starts theirs at 24
 cFactor <- 400 #set to 400 in chess system. means that an opponent that is 200 pts greater has a 75% chance of winning
 uElo <- 1500 #mean score to normalize to
@@ -57,7 +58,7 @@ plot((1 / (1:200)^(1/10)) * kFactor)
 
 #create basic data frame with results
 EloDF <- Results %>%
-  select(raceId, driverId, position) %>%
+  select(raceId, driverId, position, constructorId) %>%
   left_join(y = Races[c("raceId", "year", "round")], by = "raceId") %>%
   arrange(year, round)
 
@@ -105,7 +106,7 @@ EloHoldings <- EloDF %>%
          EloRaceId = NA)
 
 ###main function that calculates the Elo scores per round
-calculateRound <- function(Round) {
+calculateRound <- function(Round, teammate.only = FALSE) {
   
   thisRoundDF <- EloDF %>%
     filter(EloRaceId == Round)
@@ -117,14 +118,27 @@ calculateRound <- function(Round) {
   for (i in seq_along(thisRoundDF$driverId)) {
     
     #replace Bgn score with End score of previous round
-    if (is.na(thisRoundDF$EloScoreBgn[i])) {thisRoundDF$EloScoreBgn[i] <- as.numeric(EloHoldings[which(EloHoldings$driverId == thisRoundDF$driverId[i]),"EloHold"])}
+    if (is.na(thisRoundDF$EloScoreBgn[i])) {
+      thisRoundDF$EloScoreBgn[i] <-
+        as.numeric(EloHoldings[which(EloHoldings$driverId == thisRoundDF$driverId[i]), "EloHold"])
+    }
     
     #if no previous round then replace with Rookie Value; probably unneccessary because EloHoldings now contains rookie value
     if (is.na(thisRoundDF$EloScoreBgn[i])) {thisRoundDF$EloScoreBgn[i] <- rookieElo}
     
     #list of all drivers but the one to calculate
-    competitorDrivers <- unique(thisRoundDF$driverId)[unique(thisRoundDF$driverId) != thisRoundDF$driverId[i]]
-
+    if (teammate.only) {
+      competitorDrivers <- thisRoundDF %>%
+        filter(driverId != driverId[i],
+               constructorId == as.numeric(thisRoundDF[thisRoundDF$driverId == driverId[i],
+                                                       "constructorId"])) %>%
+        pull(driverId)
+    } else if (!teammate.only) {
+      competitorDrivers <-
+        unique(thisRoundDF$driverId)[unique(thisRoundDF$driverId) != thisRoundDF$driverId[i]]
+    } else
+      stop("teammate argument must be a logical")
+    
     #initalize array
     ExpWin <- array(data = NA, dim = length(competitorDrivers))
     
@@ -184,7 +198,7 @@ calculateRound <- function(Round) {
 
 #calculate scores for all rounds
 # lapply(1:100, calculateRound)
-lapply(sort(unique(EloDF$EloRaceId)), calculateRound)
+lapply(sort(unique(EloDF$EloRaceId)), calculateRound, teammate.only = TRUE)
 
 #add race date
 EloDF <- EloDF %>%
@@ -206,17 +220,20 @@ seashell.theme <- theme(legend.position = "none",
 
 #visualization of Elos over time
 EloDF %>%
+  left_join(y = Drivers[, c("driverId", "driverRef")]) %>%
   # filter(DescTools::Year(date) >=2010) %>%
-  ggplot(aes(x = date, y = EloScoreEnd, group = driverId, color = as.factor(driverId)), alpha = .3) +
+  ggplot(aes(x = date, y = EloScoreEnd, group = driverRef, color = as.factor(driverId)), alpha = .3) +
   geom_step(alpha = 0.5) +
   scale_y_continuous(breaks = seq(250 * floor(min(EloDF$EloScoreEnd) / 250),
                                   250 * ceiling(max(EloDF$EloScoreEnd) / 250),
                                   250)) +
-  labs(x = "Year", y = "Elo Score") +
+  labs(title = "Elo ratings of F1 drivers",
+       subtitle = "Based on performance against teammate",
+       x = "Year", y = "Elo rating") +
   seashell.theme
 
 ggsave(filename = "F1_Elo_rainbow.png",
-       plot = last_plot(),
+       plot = ggplot2::last_plot(),
        path = project.path,
        device = "png",
        width = 9,
@@ -234,12 +251,12 @@ EloDF %>%
   group_by(driverId) %>%
   mutate(Rank = rank(-EloScore)) %>%
   ungroup() %>%
-  filter(Rank <= 5) %>%
+  filter(Rank <= 5)
   group_by(driverId) %>%
   summarize(EloScore = mean(EloScore)) %>%
   left_join(y = Drivers[, c("driverId", "driverRef")], by = "driverId") %>%
-  arrange(desc(EloScore)) %>%
-  View()
+  select(-driverId) %>%
+  arrange(desc(EloScore))
 
 #distribution of Elos for end of each year with champion Elo vline
 EloDF %>%
@@ -257,7 +274,7 @@ EloDF %>%
     facet_wrap(~ year, scale = "free_x") +
     geom_vline(aes(xintercept = Champion), color = "grey60", size = 1.05) +
     guides(fill = FALSE) +
-    labs(x = "Elo Score") +
+    labs(x = "Elo rating") +
     theme(
       legend.position = "none",
       plot.subtitle = element_text(vjust = 1),
@@ -312,13 +329,15 @@ EloDF %>%
 EloDF %>%
   group_by(year) %>%
   filter(round == max(round),
-         year >= 1990) %>%
+         year >= 1950) %>%
   ungroup() %>%
   ggplot(aes(x = EloScoreEnd)) +
   geom_density_ridges_gradient(aes(y = as.factor(year), fill = ..x..), color = "white") +
-  scale_fill_viridis_c(begin = .2, end = .8) +
+  scale_fill_viridis_c(begin = .3, end = .9, direction = -1) +
   guides(fill = FALSE) +
-  labs(x = "Elo Score", y = "Year") +
+  labs(title = "Distribution F1 drivers' Elo ratings by season",
+       subtitle = "Based on performance against teammate",
+       x = "Elo rating", y = "Year") +
   scale_x_continuous(breaks = seq(1000, 2200, 200)) +
   coord_cartesian(xlim = c(1000, 2200)) +
   theme(
@@ -332,6 +351,13 @@ EloDF %>%
                                    colour = NA),
     axis.title = element_text(colour = "gray30")
   )
+
+ggsave(filename = "F1_Elo_ridges.png",
+       plot = ggplot2::last_plot(),
+       path = project.path,
+       device = "png",
+       width = 6,
+       height = 15)
 
 #distribution of Elos for each race
 EloDF %>%
